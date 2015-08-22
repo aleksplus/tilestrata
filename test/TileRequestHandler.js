@@ -414,7 +414,7 @@ describe('TileRequestHandler', function() {
 		});
 		it('should return statusCode attached to provider error if available', function(done) {
 			var mockServer = new TileServer();
-			var mockRequest = TileRequest.parse('/layer/1/2/3/tile.png');
+			var mockRequest = TileRequest.parse('/layer/1/2/3.png');
 			var handler = new TileRequestHandler();
 			handler.use({
 				serve: function(server, req, callback) {

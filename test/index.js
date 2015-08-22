@@ -125,7 +125,7 @@ describe('require("tilestrata")', function() {
 			var initCalled = false;
 
 			var server = new TileServer();
-			server.layer('basemap').route('file.txt')
+			server.layer('basemap').route('.txt')
 				.use({
 					init: function(server, callback) {
 						setTimeout(function() {
@@ -139,7 +139,7 @@ describe('require("tilestrata")', function() {
 				});
 
 			var middleware = tilestrata.middleware({server: server, prefix: '/tiles'});
-			testMiddleware(middleware, '/tiles/basemap/3/2/1/file.txt', false, {
+			testMiddleware(middleware, '/tiles/basemap/3/2/1.txt', false, {
 				status: 200,
 				headers: expected_headers,
 				buffer: new Buffer('true', 'utf8')
