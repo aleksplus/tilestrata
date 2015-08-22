@@ -4,6 +4,7 @@
 [![Coverage Status](http://img.shields.io/coveralls/naturalatlas/tilestrata/master.svg?style=flat)](https://coveralls.io/r/naturalatlas/tilestrata)
 
 TileStrata is a pluggable "slippy map" tile server that emphasizes code-as-configuration. It's clean, highly tested, and performant. After using [TileStache](http://tilestache.org/) (excellent) we decided we needed something that more-closely matched our stack: Node.js. The primary goal is painless extendability.
+**This fork uses different url scheme in routes**
 
 ```sh
 $ npm install tilestrata --save
@@ -50,14 +51,14 @@ var strata = tilestrata.createServer();
 
 // define layers
 strata.layer('basemap')
-    .route('tile@2x.png')
+    .route('@2x.png')
         .use(disk.cache({dir: '/var/lib/tiles/basemap'}))
         .use(mapnik({
             xml: '/path/to/map.xml',
             tileSize: 512,
             scale: 2
         }))
-    .route('tile.png')
+    .route('.png')
         .use(disk.cache({dir: '/var/lib/tiles/basemap'}))
         .use(dependency('basemap', 'tile@2x.png'))
         .use(sharp(function(image, sharp) {
@@ -71,7 +72,7 @@ strata.listen(8080);
 Once configured and started, tiles can be accessed via:
 
 ```
-/:layer/:z/:x:/:y/:filename
+/:layer/:z/:x:/:filename
 ```
 
 ### Integrate with [Express.js](http://expressjs.com/) / [Connect](https://github.com/senchalabs/connect)
