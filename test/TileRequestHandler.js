@@ -28,6 +28,12 @@ describe('TileRequestHandler', function() {
 		});
 	});
 	describe('use()', function() {
+		it('should ignore falsy values', function() {
+			var handler = new TileRequestHandler();
+			assert.equal(handler.use(null), handler);
+			assert.equal(handler.use(false), handler);
+			assert.equal(handler.use(), handler);
+		});
 		it('should allow chaining', function() {
 			var handler = new TileRequestHandler();
 			var _plugin = {serve: function() {}};
@@ -403,6 +409,22 @@ describe('TileRequestHandler', function() {
 				assert.equal(status, 200);
 				assert.equal(buffer.toString('utf8'), 'success');
 				assert.deepEqual(headers, {'X-Test-Status': 'success'});
+				done();
+			});
+		});
+		it('should return statusCode attached to provider error if available', function(done) {
+			var mockServer = new TileServer();
+			var mockRequest = TileRequest.parse('/layer/1/2/3/tile.png');
+			var handler = new TileRequestHandler();
+			handler.use({
+				serve: function(server, req, callback) {
+					var err = new Error('My error');
+					err.statusCode = 999;
+					callback(err);
+				}
+			});
+			handler.GET(mockServer, mockRequest, function(status, buffer, headers) {
+				assert.equal(status, 999);
 				done();
 			});
 		});

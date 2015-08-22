@@ -11,7 +11,7 @@ $ npm install tilestrata --save
 
 ### Introduction
 
-TileStrata consists of three main actors, usually implemented as plugins:
+TileStrata consists of five main actors, usually implemented as plugins:
 
 - [*"provider"*](#writing-providers) – Generates a new tile (e.g mapnik)
 - [*"cache"*](#writing-caches) – Persists a tile for later requests (e.g. filesystem)
@@ -19,10 +19,12 @@ TileStrata consists of three main actors, usually implemented as plugins:
 - [*"request hook"*](#writing-request-hooks) – Called at the very beginning of a tile request.
 - [*"response hook"*](#writing-response-hooks) – Called right before a tile is served to the client.
 
+<img src="https://cdn.rawgit.com/naturalatlas/tilestrata/master/graphics/reqflow.svg" width="760" />
+
 #### List of Plugins
 
 - [tilestrata-mapnik](https://github.com/naturalatlas/tilestrata-mapnik) – Render tiles with [mapnik](http://mapnik.org/).
-- [tilestrata-disk](https://github.com/naturalatlas/tilestrata-disk) – Cache map tiles to the filesystem.
+- [tilestrata-disk](https://github.com/naturalatlas/tilestrata-disk) – Cache map tiles to the filesystem (or serve from it)
 - [tilestrata-dependency](https://github.com/naturalatlas/tilestrata-dependency) – Fetch tiles from other layers.
 - [tilestrata-sharp](https://github.com/naturalatlas/tilestrata-sharp) – Compress, resize, transcode tiles (jpg, png, webp) using [libvips](https://www.npmjs.com/package/sharp).
 - [tilestrata-gm](https://github.com/naturalatlas/tilestrata-gm) – Perform all sorts of image operations on tiles using [GraphicsMagick](https://www.npmjs.com/package/gm).
@@ -33,6 +35,8 @@ TileStrata consists of three main actors, usually implemented as plugins:
 - [tilestrata-utfmerge](https://github.com/naturalatlas/tilestrata-utfmerge) – Merge UTF interactivity grids from mapnik.
 - [tilestrata-vtile](https://github.com/naturalatlas/tilestrata-vtile) – Outputs mapnik vector tiles (protobufs).
 - [tilestrata-vtile-raster](https://github.com/naturalatlas/tilestrata-vtile-raster) – Renders mapnik vector tiles into raster images.
+- [tilestrata-vtile-composite](https://github.com/naturalatlas/tilestrata-vtile-composite) – Merge multiple vector tiles.
+- [tilestrata-proxy](https://github.com/naturalatlas/tilestrata-proxy) – Fetches tiles from other servers
 
 ## Configuration
 
@@ -46,16 +50,16 @@ var strata = tilestrata.createServer();
 
 // define layers
 strata.layer('basemap')
-    .route('@2x.png')
-        .use(disk({dir: '/var/lib/tiles/basemap'}))
+    .route('tile@2x.png')
+        .use(disk.cache({dir: '/var/lib/tiles/basemap'}))
         .use(mapnik({
             xml: '/path/to/map.xml',
             tileSize: 512,
             scale: 2
         }))
-    .route('.png')
-        .use(disk({dir: '/var/lib/tiles/basemap'}))
-        .use(dependency('basemap', '@2x.png'))
+    .route('tile.png')
+        .use(disk.cache({dir: '/var/lib/tiles/basemap'}))
+        .use(dependency('basemap', 'tile@2x.png'))
         .use(sharp(function(image, sharp) {
             return image.resize(256);
         }));
@@ -67,7 +71,7 @@ strata.listen(8080);
 Once configured and started, tiles can be accessed via:
 
 ```
-/:layer/:z/:x/:filename
+/:layer/:z/:x:/:y/:filename
 ```
 
 ### Integrate with [Express.js](http://expressjs.com/) / [Connect](https://github.com/senchalabs/connect)
@@ -111,6 +115,10 @@ In advanced use cases, it might be necessary for tiles to not be returned by the
 ```
 X-TileStrata-CacheWait:1
 ```
+
+## Health Checks
+
+TileStrata includes a very basic `/health` endpoint that will return a `200 OK` if it can accept connections.
 
 ## API Reference
 
