@@ -601,7 +601,7 @@ describe('TileRequestHandler', function() {
 			var _cache_set_calls = 0;
 
 			var mockServer = new TileServer();
-			var mockRequest = TileRequest.parse('/layer/1/2/3/tile.png');
+			var mockRequest = TileRequest.parse('/layer/1/2/3.png');
 			var handler = new TileRequestHandler();
 			var assertCacheSet = function(server, req, buffer, headers, callback) {
 				_cache_set_calls++;
