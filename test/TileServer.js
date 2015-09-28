@@ -3,6 +3,7 @@ var TileLayer = require('../lib/TileLayer.js');
 var TileRequest = require('../lib/TileRequest.js');
 var assert = require('chai').assert;
 var http = require('http');
+var os = require('os');
 var version = require('../package.json').version;
 
 var HEADER_CACHECONTROL = 'max-age=60';
@@ -106,6 +107,24 @@ describe('TileServer', function() {
 				done();
 			});
 		});
+		it('should return a 404 status is request outside of layer bboxes', function(done) {
+			var valid_bbox = [[1,1,-1,1],[
+				-111.37390136718749,
+				45.3297027614069,
+				-111.11228942871094,
+				45.47746617959318
+			]];
+			var server = new TileServer();
+			server.layer('layer', {bbox: valid_bbox}).route('tile.png').use(noop_provider);
+
+			var tile_outside = '12/781/1469';
+			var req = TileRequest.parse('/layer/' + tile_outside + '/tile.png', {}, 'GET');
+			server.serve(req, false, function(status, buffer, headers) {
+				assert.equal(status, 404);
+				assert.equal(buffer.toString('utf8'), 'Not found');
+				done();
+			});
+		});
 		it('should return a 200 status is request inside of layer bbox', function(done) {
 			var valid_bbox = [
 				-111.37390136718749,
@@ -122,6 +141,28 @@ describe('TileServer', function() {
 
 			var tile_inside = '14/3129/5867';
 			var req = TileRequest.parse('/layer/' + tile_inside + '.png', {}, 'GET');
+			server.serve(req, false, function(status, buffer, headers) {
+				assert.equal(status, 200);
+				assert.equal(buffer.toString('utf8'), 'Valid');
+				done();
+			});
+		});
+		it('should return a 200 status is request inside of layer bboxes', function(done) {
+			var valid_bbox = [[1,1,-1,1],[
+				-111.37390136718749,
+				45.3297027614069,
+				-111.11228942871094,
+				45.47746617959318
+			]];
+			var server = new TileServer();
+			server.layer('layer', {bbox: valid_bbox}).route('tile.png').use({
+				serve: function(server, req, callback) {
+					callback(null, new Buffer('Valid'), {});
+				}
+			});
+
+			var tile_inside = '14/3129/5867';
+			var req = TileRequest.parse('/layer/' + tile_inside + '/tile.png', {}, 'GET');
 			server.serve(req, false, function(status, buffer, headers) {
 				assert.equal(status, 200);
 				assert.equal(buffer.toString('utf8'), 'Valid');
@@ -630,6 +671,7 @@ describe('TileServer', function() {
 
 			server.listen(8889, function(err) {
 				assert.isFalse(!!err, 'Unexpected error: ' + (err ? (err.message || err) : ''));
+				if (err) throw err;
 				http.get('http://localhost:8889/mylayer/3/2/1.txt', function(res) {
 					var body = '';
 					res.on('data', function(data) { body += data; });
@@ -667,23 +709,79 @@ describe('TileServer', function() {
 			});
 		});
 		describe('/health', function() {
-			it('should return a 200 OK', function(done) {
-				var server = new TileServer();
-				var pkg = require('../package.json');
-
-				server.listen(8888, function(err) {
-					if (err) throw err;
-					http.get('http://localhost:8888/health', function(res) {
-						var body = '';
-						res.on('data', function(data) { body += data; });
-						res.on('end', function() {
-							assert.equal(res.statusCode, 200);
-							var expected = '{"ok":true,"version":"'+pkg.version+'"}';
-							assert.equal(body, expected);
-							assert.equal(res.headers['content-type'], 'application/json');
-							assert.equal(res.headers['content-length'], expected.length);
-							done();
+			var server;
+			var pkg = require('../package.json');
+			before(function(done) {
+				server = new TileServer();
+				server.listen(8888, done);
+			});
+			it('should return a 200 OK normally', function(done) {
+				http.get('http://localhost:8888/health', function(res) {
+					var body = '';
+					res.on('data', function(data) { body += data; });
+					res.on('end', function() {
+						assert.equal(res.statusCode, 200);
+						var expected = '{"ok":true,"version":"'+pkg.version+'","host":'+JSON.stringify(os.hostname())+'}';
+						assert.equal(body, expected);
+						assert.equal(res.headers['content-type'], 'application/json');
+						assert.equal(res.headers['content-length'], expected.length);
+						done();
+					});
+				});
+			});
+			it('should include data from strata.healthy if set', function(done) {
+				server.healthy = function(callback) {
+					return callback(null, {'host': '(overridden)', 'commit': 000000, 'message': '"Hello"'});
+				};
+				http.get('http://localhost:8888/health', function(res) {
+					var body = '';
+					res.on('data', function(data) { body += data; });
+					res.on('end', function() {
+						var parsedBody = JSON.parse(body);
+						assert.equal(res.statusCode, 200);
+						assert.deepEqual(parsedBody, {
+							ok: true,
+							version: pkg.version,
+							host: '(overridden)',
+							commit: 000000,
+							message: '"Hello"'
 						});
+						done();
+					});
+				});
+			});
+			it('should return 500 if strata.healthy returns an error', function(done) {
+				var now = Date.now();
+				server.healthy = function(callback) {
+					callback(new Error('CPU usage too high'))
+				};
+				http.get('http://localhost:8888/health', function(res) {
+					var body = '';
+					res.on('data', function(data) { body += data; });
+					res.on('end', function() {
+						var parsedBody = JSON.parse(body);
+						assert.equal(res.statusCode, 500);
+						assert.deepEqual(parsedBody, {
+							ok: false,
+							version: pkg.version,
+							host: os.hostname(),
+							message: 'CPU usage too high'
+						});
+						done();
+					});
+				});
+			});
+			it('should not expose hostname if TILESTRATA_HIDEHOSTNAME=1', function(done) {
+				server.healthy = null;
+				process.env.TILESTRATA_HIDEHOSTNAME = '1';
+				http.get('http://localhost:8888/health', function(res) {
+					var body = '';
+					res.on('data', function(data) { body += data; });
+					res.on('end', function() {
+						assert.equal(res.statusCode, 200);
+						var expected = '{"ok":true,"version":"'+pkg.version+'","host":"(hidden)"}';
+						assert.equal(body, expected);
+						done();
 					});
 				});
 			});
